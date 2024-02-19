@@ -64,7 +64,7 @@ func main() {
 	}
 	sugar.Info("Success migration")
 
-	err = server.RunServer(data)
+	err = server.RunServer(data, sugar)
 	if err != nil {
 		sugar.Fatalf("Failed to run server: %v", err)
 	}

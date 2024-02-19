@@ -4,18 +4,20 @@ import (
 	"avitoTeastProj/internal/handlers"
 	"avitoTeastProj/internal/service"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"log"
 )
 
-func RunServer(db *gorm.DB) error {
-	userService := service.NewUserService(db)
+func RunServer(db *gorm.DB, logger *zap.SugaredLogger) error {
+	userService := service.NewUserService(db, logger)
 
 	r := gin.Default()
 
 	// Глобальный middleware для добавления userService в контекст каждого запроса
 	r.Use(func(c *gin.Context) {
 		c.Set("userService", userService)
+		c.Set("logger", logger)
 		c.Next()
 	})
 
