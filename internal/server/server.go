@@ -13,28 +13,25 @@ func RunServer(db *gorm.DB) error {
 
 	r := gin.Default()
 
+	// Глобальный middleware для добавления userService в контекст каждого запроса
 	r.Use(func(c *gin.Context) {
 		c.Set("userService", userService)
 		c.Next()
 	})
 
-	r.GET("/balance", handlers.GetBalanceHandler)
-	r.POST("/setbalance", func(c *gin.Context) {
-		handlers.SetBalance(c)
-	})
-	r.POST("/setbalance/reservmoney", func(c *gin.Context) {
-		handlers.ReserveMoneyHandlers(c)
-	})
-	r.POST("/setbalance/acceptmoney", func(c *gin.Context) {
-		handlers.AcceptMoneyHandlers(c)
-	})
+	// Группировка ручек, связанных с балансом
+	balanceRouters := r.Group("/balance")
+	{
+		balanceRouters.GET("/", handlers.GetBalanceHandler)
+		balanceRouters.POST("/set", handlers.SetBalance)
+	}
 
-	//// Пример использования замыкания для передачи userService
-	//r.POST("/userBalance", func(c *gin.Context) {
-	//	// Извлечение userService из контекста запроса и передача его в хендлер
-	//	userService, _ := c.MustGet("userService").(*service.UserService)
-	//	handlers.SetBalance(c, userService)
-	//})
+	// Группировка ручек, связанных с операциями над балансом
+	operationRouters := r.Group("/operations")
+	{
+		operationRouters.POST("/reservemoney", handlers.ReserveMoneyHandlers)
+		operationRouters.POST("/acceptmoney", handlers.AcceptMoneyHandlers)
+	}
 
 	// Запуск сервера
 	if err := r.Run(":8080"); err != nil {
