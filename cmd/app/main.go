@@ -4,9 +4,8 @@ import (
 	"avitoTeastProj/internal/db"
 	"avitoTeastProj/internal/models"
 	"avitoTeastProj/internal/server"
+	"go.uber.org/zap"
 	"log"
-	"log/slog"
-	"os"
 )
 
 //TODO: config()
@@ -32,16 +31,27 @@ import (
 // TODO: Opt-n. Кешировние, утечки памяти, (grafana)
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("Can't initialize zap logger: %v", err)
+	}
+
+	defer logger.Sync() // Обязательно для корректного завершения работы логгера
+
+	sugar := logger.Sugar()
+
+	sugar.Infow("Zap Logger initialized successfully",
+		"version", "v1.0.0", "mode", "production",
+	)
 
 	cfg, err := db.LoadConfig("./configs/config.yaml")
 	if err != nil {
-		logger.Error("err in load config", err)
+		sugar.Fatalf("Failed to load configs %v", err)
 	}
 
 	data, err := db.ConnectToDb(cfg)
 	if err != nil {
-		log.Fatal("err in ConnectToDb", err)
+		sugar.Fatalf("Failed to connect DB %v", err)
 	}
 
 	err = data.AutoMigrate(&models.User{},
@@ -50,12 +60,12 @@ func main() {
 		&models.ReportEntry{},
 		&models.Service{})
 	if err != nil {
-		logger.Error("Migration failed: ", err)
+		sugar.Fatalf("Migration failed: %v", err)
 	}
-	logger.Info("Sucsess migratione")
+	sugar.Info("Success migration")
 
 	err = server.RunServer(data)
 	if err != nil {
-		log.Fatal("Failed to run server: ", err)
+		sugar.Fatalf("Failed to run server: %v", err)
 	}
 }
