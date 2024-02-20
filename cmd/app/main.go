@@ -8,28 +8,6 @@ import (
 	"log"
 )
 
-//TODO: config()
-
-// TODO: logger(slog)
-
-// TODO: установка и настройка докера
-
-// TODO:Установка и настройка БД
-
-// TODO:Инициализация репозитория
-
-// TODO:создание сущностей(User, Account, Product...?)
-
-// TODO: структура БД (gorm)
-
-// TODO: Создание методов реализующих бизнес логику
-
-// TODO: Api. Создание ручек для методов
-
-// TODO: Test. Разработка тестов(юнит, мод, нагр.)
-
-// TODO: Opt-n. Кешировние, утечки памяти, (grafana)
-
 func main() {
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -55,10 +33,8 @@ func main() {
 	}
 
 	err = data.AutoMigrate(&models.User{},
-		&models.Order{},
 		&models.Reserve{},
-		&models.ReportEntry{},
-		&models.Service{})
+		&models.ReportEntry{})
 	if err != nil {
 		sugar.Fatalf("Migration failed: %v", err)
 	}

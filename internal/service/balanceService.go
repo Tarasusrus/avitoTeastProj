@@ -49,9 +49,9 @@ func (s UserService) UpdateBalance(id uint, balance uint) error {
 	return nil
 }
 
-// Метод резервирования средств с основного баланса на отдельном счете. Принимает id пользователя, ИД услуги, ИД заказа, стоимость.
+// ReserveMoney Метод резервирования средств с основного баланса на отдельном счете. Принимает id пользователя, ИД услуги, ИД заказа, стоимость.
 func (s UserService) ReserveMoney(userId uint, serviceId uint, orderId uint, price uint) error {
-	s.Logger.Infow("Attempting to accept money", "userId", userId, "serviceId", serviceId, "orderId", orderId, "price", price)
+	s.Logger.Infow("Attempting to Reserve money", "userId", userId, "serviceId", serviceId, "orderId", orderId, "price", price)
 	reserve := models.Reserve{
 		UserID:         userId,
 		ServiceID:      serviceId,
@@ -88,7 +88,7 @@ func (s UserService) ReserveMoney(userId uint, serviceId uint, orderId uint, pri
 		return fmt.Errorf("ReserveMoney, error in Commit: %w", err)
 	}
 
-	s.Logger.Infow("Successfully accepted money", "userId", userId, "price", price)
+	s.Logger.Infow("Successfully Reserve money", "userId", userId, "price", price)
 	return nil
 }
 
@@ -104,7 +104,7 @@ func (s UserService) AcceptMoney(userId uint, serviceId uint, orderId uint, pric
 	}()
 
 	var reverse models.Reserve
-	if err := tx.Set("gorm:query_option", "FOR UPDATE").Where("UserID = ? AND ServiseID = ? AND OrderID = ?", userId, serviceId, orderId).First(reverse).Error; err != nil {
+	if err := tx.Set("gorm:query_option", "FOR UPDATE").Where("user_Id = ? AND service_Id = ? AND order_Id = ?", userId, serviceId, orderId).First(&reverse).Error; err != nil {
 		tx.Rollback() // Откат транзакции в случае ошибки
 		return fmt.Errorf("AcceptMoney, reserve not found: %w", err)
 	}
@@ -114,38 +114,51 @@ func (s UserService) AcceptMoney(userId uint, serviceId uint, orderId uint, pric
 		return fmt.Errorf("AcceptMoney, requested amount exceeds reserved amount")
 	}
 
+	// Создание записи в отчете о признании выручки
 	report := models.ReportEntry{
 		UserID:  userId,
 		OrderID: orderId,
 		Revenue: price,
 	}
 	if err := tx.Create(&report).Error; err != nil {
+		s.Logger.Errorw("Error creating report entry", "error", err)
 		tx.Rollback()
 		return fmt.Errorf("AcceptMoney, error creating report entry: %w", err)
 	}
 
-	//уменьшение резерва
+	s.Logger.Infow("Report entry created successfully", "userId", userId, "orderId", orderId, "revenue", price)
+
+	// Уменьшение зарезервированной суммы
 	reverse.ReservedAmount -= price
 	if err := tx.Save(&reverse).Error; err != nil {
+		s.Logger.Errorw("Error updating reserve", "error", err)
 		tx.Rollback()
 		return fmt.Errorf("AcceptMoney, error updating reserve: %w", err)
 	}
 
-	// Проверка, можно ли удалить резерв (если зарезервированная сумма равна 0)
+	// Если зарезервированная сумма равна 0, удаление записи резерва
 	if reverse.ReservedAmount == 0 {
 		if err := tx.Delete(&reverse).Error; err != nil {
-			tx.Rollback() // Откат транзакции в случае ошибки при удалении резерва
+			s.Logger.Errorw("Error deleting empty reserve", "error", err)
+			tx.Rollback()
 			return fmt.Errorf("AcceptMoney, error deleting empty reserve: %w", err)
 		}
 	}
 
-	// Подтверждение транзакции
+	if err := tx.Save(&report).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("AcceptMoney, error in Save: %w", err)
+	}
+
+	// Подтверждение транзакции после успешного выполнения всех операций
 	if err := tx.Commit().Error; err != nil {
+		s.Logger.Errorw("Error committing transaction", "error", err)
 		return fmt.Errorf("AcceptMoney, error committing transaction: %w", err)
 	}
 
+	// Логирование успешного признания выручки
+	s.Logger.Infow("Successfully accepted money and recorded in report", "userId", userId, "orderId", orderId, "price", price)
 	return nil
-
 }
 
 // GetBalance Метод получения баланса пользователя. Принимает id пользователя.
